@@ -73,37 +73,59 @@ _format_countdown() {
 	fi
 }
 
+_get_color() {
+	local pct=$1
+	if [ "$pct" -ge 85 ]; then
+		echo "colour196"
+	elif [ "$pct" -ge 75 ]; then
+		echo "colour178"
+	else
+		echo "colour173"
+	fi
+}
+
 run_segment() {
-	if [ ! -f "$CLAUDE_USAGE_SESSION_KEY_FILE" ] || [ ! -f "$CLAUDE_USAGE_ORG_ID_FILE" ]; then
-		echo "Claude --% ░░░░░ ↻?"
-		return 0
-	fi
-
-	local session_key org_id
-	session_key=$(cat "$CLAUDE_USAGE_SESSION_KEY_FILE" 2>/dev/null)
-	org_id=$(cat "$CLAUDE_USAGE_ORG_ID_FILE" 2>/dev/null)
-
-	if [ -z "$session_key" ] || [ -z "$org_id" ]; then
-		echo "Claude --% ░░░░░ ↻?"
-		return 0
-	fi
-
-	# Check cache (cache stores: line1=timestamp, line2=pct, line3=reset_ts)
-	local now
+	local now session_key org_id
 	now=$(date +%s)
 
+	# Try cache first (includes credentials)
 	if [ -f "$CLAUDE_USAGE_CACHE_FILE" ]; then
 		local cache_time cache_age
 		cache_time=$(sed -n '1p' "$CLAUDE_USAGE_CACHE_FILE")
 		cache_age=$((now - cache_time))
 		if [ "$cache_age" -lt "$CLAUDE_USAGE_UPDATE_PERIOD" ]; then
-			# Rebuild output with fresh countdown from cached reset time
-			local cached_pct cached_bar cached_reset_ts countdown
+			local cached_pct cached_reset_ts
 			cached_pct=$(sed -n '2p' "$CLAUDE_USAGE_CACHE_FILE")
 			cached_reset_ts=$(sed -n '3p' "$CLAUDE_USAGE_CACHE_FILE")
+
+			if [ "$cached_pct" = "expired" ]; then
+				echo "#[fg=colour196]Claude: EXPIRED ░░░░░"
+				return 0
+			fi
+
+			local cached_bar countdown color
 			cached_bar=$(_build_bar "$cached_pct")
 			countdown=$(_format_countdown "$cached_reset_ts")
-			echo "Claude ${cached_pct}% ${cached_bar} ↻${countdown}"
+			color=$(_get_color "$cached_pct")
+			echo "#[fg=${color}]Claude: ${cached_pct}% ${cached_bar} ↻${countdown}"
+			return 0
+		fi
+
+		# Cache stale — read credentials from cache to avoid file reads
+		session_key=$(sed -n '4p' "$CLAUDE_USAGE_CACHE_FILE")
+		org_id=$(sed -n '5p' "$CLAUDE_USAGE_CACHE_FILE")
+	fi
+
+	# Fall back to credential files if not in cache
+	if [ -z "$session_key" ] || [ -z "$org_id" ]; then
+		if [ ! -f "$CLAUDE_USAGE_SESSION_KEY_FILE" ] || [ ! -f "$CLAUDE_USAGE_ORG_ID_FILE" ]; then
+			echo "Claude: --% ░░░░░ ↻?"
+			return 0
+		fi
+		session_key=$(cat "$CLAUDE_USAGE_SESSION_KEY_FILE" 2>/dev/null)
+		org_id=$(cat "$CLAUDE_USAGE_ORG_ID_FILE" 2>/dev/null)
+		if [ -z "$session_key" ] || [ -z "$org_id" ]; then
+			echo "Claude: --% ░░░░░ ↻?"
 			return 0
 		fi
 	fi
@@ -120,14 +142,30 @@ run_segment() {
 
 	if [ -z "$response" ]; then
 		if [ -f "$CLAUDE_USAGE_CACHE_FILE" ]; then
-			local cached_pct cached_bar cached_reset_ts countdown
+			local cached_pct cached_bar cached_reset_ts countdown color
 			cached_pct=$(sed -n '2p' "$CLAUDE_USAGE_CACHE_FILE")
 			cached_reset_ts=$(sed -n '3p' "$CLAUDE_USAGE_CACHE_FILE")
 			cached_bar=$(_build_bar "$cached_pct")
 			countdown=$(_format_countdown "$cached_reset_ts")
-			echo "Claude ${cached_pct}% ${cached_bar} ↻${countdown}"
+			color=$(_get_color "$cached_pct")
+			echo "#[fg=${color}]Claude: ${cached_pct}% ${cached_bar} ↻${countdown}"
 		else
-			echo "Claude --% ░░░░░ ↻?"
+			echo "Claude: --% ░░░░░ ↻?"
+		fi
+		return 0
+	fi
+
+	# Check for API error responses (expired key, permission error)
+	local api_error
+	api_error=$(echo "$response" | jq -r '.type // empty' 2>/dev/null)
+	if [ "$api_error" = "error" ]; then
+		local error_type
+		error_type=$(echo "$response" | jq -r '.error.type // empty' 2>/dev/null)
+		if [ "$error_type" = "authentication_error" ] || [ "$error_type" = "permission_error" ]; then
+			printf '%s\n%s\n%s\n%s\n%s\n' "$now" "expired" "" "$session_key" "$org_id" > "$CLAUDE_USAGE_CACHE_FILE"
+			echo "#[fg=colour196]Claude: EXPIRED ░░░░░"
+		else
+			echo "#[fg=colour196]Claude: ERR ░░░░░"
 		fi
 		return 0
 	fi
@@ -138,18 +176,19 @@ run_segment() {
 	reset_ts=$(echo "$response" | jq -r '.five_hour.resets_at // empty' 2>/dev/null)
 
 	if [ -z "$session_pct" ]; then
-		echo "Claude err ░░░░░"
+		echo "#[fg=colour178]Claude: ERR ░░░░░"
 		return 0
 	fi
 
 	session_pct=$(printf "%.0f" "$session_pct")
-	local bar countdown
+	local bar countdown color
 	bar=$(_build_bar "$session_pct")
 	countdown=$(_format_countdown "$reset_ts")
+	color=$(_get_color "$session_pct")
 
-	# Cache: line1=timestamp, line2=pct, line3=reset_ts
-	printf '%s\n%s\n%s\n' "$now" "$session_pct" "$reset_ts" > "$CLAUDE_USAGE_CACHE_FILE"
+	# Cache: line1=timestamp, line2=pct, line3=reset_ts, line4=session_key, line5=org_id
+	printf '%s\n%s\n%s\n%s\n%s\n' "$now" "$session_pct" "$reset_ts" "$session_key" "$org_id" > "$CLAUDE_USAGE_CACHE_FILE"
 
-	echo "Claude ${session_pct}% ${bar} ↻${countdown}"
+	echo "#[fg=${color}]Claude: ${session_pct}% ${bar} ↻${countdown}"
 	return 0
 }

@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>claude_tmux_powerline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --bg-raised: #111110;
+      --amber: #e8a94a;
+      --amber-bright: #f5c96a;
+      --amber-dim: #7a6f5a;
+      --amber-muted: #3d372a;
+      --amber-faint: #1e1b15;
+      --amber-glow: rgba(232, 169, 74, 0.12);
+      --amber-glow-strong: rgba(232, 169, 74, 0.25);
+      --green: #4ade80;
+      --yellow: #facc15;
+      --red: #ef4444;
+      --radius: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      scrollbar-width: thin;
+      scrollbar-color: var(--amber-muted) var(--bg);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--amber);
+      font-family: 'Fira Code', monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ═══════════════════════════════════════
+       CRT SCREEN EFFECTS
+       ═══════════════════════════════════════ */
+
+    .crt {
+      position: relative;
+      min-height: 100vh;
+    }
+
+    /* Scan lines */
+    .crt::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.08) 2px,
+        rgba(0, 0, 0, 0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* Vignette */
+    .crt::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(
+        ellipse at center,
+        transparent 50%,
+        rgba(0, 0, 0, 0.5) 100%
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* Noise texture */
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 998;
+      opacity: 0.035;
+    }
+
+    .noise svg { width: 100%; height: 100%; }
+
+    /* CRT power-on flash */
+    .crt-boot {
+      position: fixed;
+      inset: 0;
+      background: var(--amber);
+      z-index: 2000;
+      animation: crt-on 0.6s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes crt-on {
+      0% {
+        opacity: 0.8;
+        transform: scaleY(0.005) scaleX(0.4);
+      }
+      20% {
+        opacity: 0.6;
+        transform: scaleY(0.005) scaleX(1);
+      }
+      40% {
+        opacity: 0.4;
+        transform: scaleY(1) scaleX(1);
+      }
+      100% {
+        opacity: 0;
+        transform: scaleY(1) scaleX(1);
+      }
+    }
+
+    /* ═══════════════════════════════════════
+       PHOSPHOR FLICKER (subtle)
+       ═══════════════════════════════════════ */
+
+    @keyframes phosphor {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.98; }
+      75% { opacity: 0.995; }
+    }
+
+    .crt-content {
+      animation: phosphor 4s infinite;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ═══════════════════════════════════════
+       LAYOUT
+       ═══════════════════════════════════════ */
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .nav {
+      padding: 24px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav a {
+      color: var(--amber-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      transition: color 0.2s;
+    }
+
+    .nav a:hover { color: var(--amber); }
+
+    .nav-brand {
+      font-family: 'VT323', monospace;
+      font-size: 1.1rem;
+      color: var(--amber) !important;
+      letter-spacing: 1px;
+    }
+
+    /* ═══════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════ */
+
+    .hero {
+      padding: 80px 0 60px;
+      text-align: left;
+    }
+
+    .prompt {
+      font-family: 'VT323', monospace;
+      font-size: 2.8rem;
+      line-height: 1.2;
+      color: var(--amber-bright);
+      text-shadow:
+        0 0 10px var(--amber-glow),
+        0 0 40px var(--amber-glow);
+      margin-bottom: 8px;
+      min-height: 3.4rem;
+    }
+
+    .prompt .chevron {
+      color: var(--amber-dim);
+    }
+
+    .tagline {
+      font-family: 'VT323', monospace;
+      font-size: 1.5rem;
+      color: var(--amber-dim);
+      min-height: 2rem;
+      margin-bottom: 48px;
+    }
+
+    /* Cursor blink */
+    .cursor {
+      display: inline-block;
+      width: 0.6em;
+      height: 1.1em;
+      background: var(--amber);
+      vertical-align: text-bottom;
+      animation: blink 0.8s step-end infinite;
+      margin-left: 2px;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* ═══════════════════════════════════════
+       LIVE DEMO
+       ═══════════════════════════════════════ */
+
+    .demo-window {
+      background: var(--bg-raised);
+      border: 1px solid var(--amber-muted);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 80px;
+      box-shadow:
+        0 0 30px var(--amber-glow),
+        0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .demo-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: rgba(232, 169, 74, 0.04);
+      border-bottom: 1px solid var(--amber-muted);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-red { background: #e5534b; }
+    .dot-yellow { background: #d29922; }
+    .dot-green { background: #57ab5a; }
+
+    .demo-titlebar-text {
+      flex: 1;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--amber-dim);
+      margin-right: 36px;
+    }
+
+    .demo-body {
+      padding: 24px 20px;
+    }
+
+    .demo-tmux {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 0.85rem;
+      border-top: 1px solid var(--amber-muted);
+      margin-top: 16px;
+    }
+
+    .demo-tmux-left {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .demo-tmux-left .seg {
+      padding: 2px 8px;
+      border-radius: 2px;
+      font-size: 0.8rem;
+    }
+
+    .seg-session { background: #303030; color: var(--amber-dim); }
+    .seg-host { background: #252525; color: #7a9ec2; }
+
+    .demo-tmux-right {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .seg-claude {
+      padding: 2px 10px;
+      border-radius: 2px;
+      font-size: 0.8rem;
+      transition: color 0.6s ease, text-shadow 0.6s ease;
+    }
+
+    .seg-pwd { background: #252525; color: #b48ead; padding: 2px 8px; border-radius: 2px; font-size: 0.8rem; }
+
+    .demo-shell {
+      color: var(--amber-dim);
+      font-size: 0.85rem;
+      line-height: 2;
+    }
+
+    .demo-shell .cmd { color: var(--amber); }
+    .demo-shell .output { color: var(--amber-dim); opacity: 0.7; }
+
+    .demo-label {
+      font-family: 'VT323', monospace;
+      font-size: 1.1rem;
+      color: var(--amber-dim);
+      text-align: center;
+      margin-top: 16px;
+      letter-spacing: 1px;
+    }
+
+    /* ═══════════════════════════════════════
+       FEATURES
+       ═══════════════════════════════════════ */
+
+    .section-title {
+      font-family: 'VT323', monospace;
+      font-size: 1.6rem;
+      color: var(--amber);
+      margin-bottom: 28px;
+      text-shadow: 0 0 20px var(--amber-glow);
+    }
+
+    .section-title .hash {
+      color: var(--amber-dim);
+      margin-right: 8px;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-bottom: 80px;
+    }
+
+    .feature-card {
+      background: var(--bg-raised);
+      border: 1px solid var(--amber-muted);
+      border-radius: var(--radius);
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .feature-card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .feature-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--amber-faint);
+      background: rgba(232, 169, 74, 0.02);
+    }
+
+    .feature-header .dot { width: 8px; height: 8px; }
+    .feature-header-title {
+      font-size: 0.7rem;
+      color: var(--amber-dim);
+      margin-left: 4px;
+    }
+
+    .feature-body {
+      padding: 16px;
+    }
+
+    .feature-name {
+      font-family: 'VT323', monospace;
+      font-size: 1.2rem;
+      color: var(--amber-bright);
+      margin-bottom: 8px;
+    }
+
+    .feature-desc {
+      color: var(--amber-dim);
+      font-size: 0.8rem;
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+
+    .feature-preview {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px 12px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      line-height: 1.8;
+      border-left: 2px solid var(--amber-muted);
+    }
+
+    .feature-preview .f-amber { color: var(--amber); }
+    .feature-preview .f-yellow { color: var(--yellow); }
+    .feature-preview .f-red { color: var(--red); }
+    .feature-preview .f-dim { color: var(--amber-dim); }
+    .feature-preview .f-green { color: var(--green); }
+
+    /* ═══════════════════════════════════════
+       INSTALL
+       ═══════════════════════════════════════ */
+
+    .install {
+      margin-bottom: 80px;
+    }
+
+    .install-block {
+      background: var(--bg-raised);
+      border: 1px solid var(--amber-muted);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative;
+    }
+
+    .install-code {
+      font-size: 0.85rem;
+      line-height: 2;
+      color: var(--amber);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .install-code .comment { color: var(--amber-dim); opacity: 0.6; }
+    .install-code .cmd { color: var(--amber-bright); }
+
+    .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: transparent;
+      border: 1px solid var(--amber-muted);
+      color: var(--amber-dim);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    .copy-btn.copied {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .install-note {
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: var(--amber-dim);
+    }
+
+    .install-note a {
+      color: var(--amber);
+      text-decoration: none;
+      border-bottom: 1px solid var(--amber-muted);
+      transition: border-color 0.2s;
+    }
+
+    .install-note a:hover {
+      border-color: var(--amber);
+    }
+
+    /* ═══════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════ */
+
+    .footer {
+      padding: 40px 0 60px;
+      border-top: 1px solid var(--amber-faint);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-left {
+      font-size: 0.75rem;
+      color: var(--amber-muted);
+      line-height: 1.8;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    .footer-links a {
+      color: var(--amber-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--amber); }
+
+    /* ═══════════════════════════════════════
+       RESPONSIVE
+       ═══════════════════════════════════════ */
+
+    @media (max-width: 600px) {
+      .prompt { font-size: 2rem; }
+      .tagline { font-size: 1.2rem; }
+      .hero { padding: 48px 0 40px; }
+      .demo-tmux { flex-direction: column; gap: 8px; align-items: flex-start; }
+      .footer { flex-direction: column; align-items: flex-start; }
+    }
+
+    /* ═══════════════════════════════════════
+       GLOW PULSE ON DEMO BAR
+       ═══════════════════════════════════════ */
+
+    @keyframes glow-pulse {
+      0%, 100% { box-shadow: 0 0 8px var(--amber-glow); }
+      50% { box-shadow: 0 0 20px var(--amber-glow-strong); }
+    }
+
+    .demo-window {
+      animation: glow-pulse 3s ease-in-out infinite;
+    }
+
+    /* ═══════════════════════════════════════
+       SELECTION
+       ═══════════════════════════════════════ */
+
+    ::selection {
+      background: var(--amber);
+      color: var(--bg);
+    }
+  </style>
+</head>
+<body>
+  <!-- CRT power-on flash -->
+  <div class="crt-boot"></div>
+
+  <!-- Noise overlay -->
+  <div class="noise">
+    <svg width="100%" height="100%">
+      <filter id="noise">
+        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/>
+      </filter>
+      <rect width="100%" height="100%" filter="url(#noise)"/>
+    </svg>
+  </div>
+
+  <div class="crt">
+    <div class="crt-content">
+      <div class="container">
+
+        <!-- NAV -->
+        <nav class="nav">
+          <a href="https://nexus.roborovski-galaxy.ts.net/" class="nav-brand">← dashboard</a>
+          <a href="https://github.com/hwansu93/claude_tmux_powerline" target="_blank">github ↗</a>
+        </nav>
+
+        <!-- HERO -->
+        <section class="hero">
+          <div class="prompt">
+            <span class="chevron">&gt; </span><span id="title-text"></span><span class="cursor" id="hero-cursor"></span>
+          </div>
+          <div class="tagline">
+            <span id="tagline-text"></span>
+          </div>
+
+          <!-- LIVE DEMO -->
+          <div class="demo-window">
+            <div class="demo-titlebar">
+              <div class="dot dot-red"></div>
+              <div class="dot dot-yellow"></div>
+              <div class="dot dot-green"></div>
+              <div class="demo-titlebar-text">tmux — bash</div>
+            </div>
+            <div class="demo-body">
+              <div class="demo-shell">
+                <div><span class="cmd">danny@nexus</span>:<span style="color:#5f87af">~/projects</span>$ claude</div>
+                <div class="output">╭──────────────────────────────────────╮</div>
+                <div class="output">│  Claude Code         v1.0.32        │</div>
+                <div class="output">│  ────────────────────────────────    │</div>
+                <div class="output">│  Ready. How can I help?              │</div>
+                <div class="output">╰──────────────────────────────────────╯</div>
+              </div>
+              <div class="demo-tmux">
+                <div class="demo-tmux-left">
+                  <span class="seg seg-session">0:0.0</span>
+                  <span class="seg seg-host">nexus</span>
+                </div>
+                <div class="demo-tmux-right">
+                  <span class="seg seg-claude" id="demo-claude">Claude: 38% ▓▓░░░ ↻2h31m</span>
+                  <span class="seg seg-pwd">~/projects</span>
+                </div>
+              </div>
+              <div class="demo-label" id="demo-label">▲ your tmux status bar</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- FEATURES -->
+        <section>
+          <div class="section-title"><span class="hash">#</span>features</div>
+          <div class="features">
+
+            <div class="feature-card">
+              <div class="feature-header">
+                <div class="dot dot-red"></div>
+                <div class="dot dot-yellow"></div>
+                <div class="dot dot-green"></div>
+                <span class="feature-header-title">color_thresholds.sh</span>
+              </div>
+              <div class="feature-body">
+                <div class="feature-name">Color-coded usage</div>
+                <div class="feature-desc">
+                  Usage percentage changes color as you approach your rate limit.
+                  At a glance, you know exactly where you stand.
+                </div>
+                <div class="feature-preview">
+                  <div><span class="f-amber">Claude: 42% ▓▓░░░ ↻3h12m</span>  <span class="f-dim">← normal</span></div>
+                  <div><span class="f-yellow">Claude: 78% ▓▓▓▓░ ↻1h05m</span>  <span class="f-dim">← caution</span></div>
+                  <div><span class="f-red">Claude: 91% ▓▓▓▓▓ ↻32m</span>    <span class="f-dim">← slow down</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-header">
+                <div class="dot dot-red"></div>
+                <div class="dot dot-yellow"></div>
+                <div class="dot dot-green"></div>
+                <span class="feature-header-title">countdown.sh</span>
+              </div>
+              <div class="feature-body">
+                <div class="feature-name">Live reset countdown</div>
+                <div class="feature-desc">
+                  See exactly when your usage window resets. The countdown
+                  recalculates every second from the cached reset timestamp —
+                  accurate without extra API calls.
+                </div>
+                <div class="feature-preview">
+                  <div class="f-dim">API polled every 2 min. countdown live every 1s.</div>
+                  <div class="f-dim">network fails? falls back to cached data.</div>
+                  <div><span class="f-amber">↻4h59m</span> → <span class="f-yellow">↻1h12m</span> → <span class="f-red">↻12m</span> → <span class="f-green">↻now</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-header">
+                <div class="dot dot-red"></div>
+                <div class="dot dot-yellow"></div>
+                <div class="dot dot-green"></div>
+                <span class="feature-header-title">expiry_detect.sh</span>
+              </div>
+              <div class="feature-body">
+                <div class="feature-name">Expired key detection</div>
+                <div class="feature-desc">
+                  Session keys die without warning. The segment detects authentication
+                  errors immediately and shows a clear status — no guessing.
+                </div>
+                <div class="feature-preview">
+                  <div><span class="f-red">Claude: EXPIRED ░░░░░</span></div>
+                  <div class="f-dim" style="margin-top:4px">$ ./refresh-key.sh</div>
+                  <div class="f-dim">Paste your session key: ••••••••</div>
+                  <div class="f-dim">Fetching organizations...</div>
+                  <div><span class="f-green">Success! Current usage: 12%</span></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- INSTALL -->
+        <section class="install">
+          <div class="section-title"><span class="hash">#</span>install</div>
+          <div class="install-block">
+            <button class="copy-btn" onclick="copyInstall(this)">copy</button>
+            <div class="install-code"><span class="comment"># clone and install</span>
+<span class="cmd">git clone</span> https://github.com/hwansu93/claude_tmux_powerline.git
+<span class="cmd">cd</span> claude_tmux_powerline
+<span class="cmd">./install.sh</span>
+
+<span class="comment"># set up your claude.ai credentials</span>
+<span class="cmd">./refresh-key.sh</span></div>
+          </div>
+          <div class="install-note">
+            Requires <a href="https://github.com/erikw/tmux-powerline">tmux-powerline</a>, curl, and jq.
+          </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+          <div class="footer-left">
+            built with bash.<br>
+            no dependencies beyond curl and jq.
+          </div>
+          <div class="footer-links">
+            <a href="https://github.com/hwansu93/claude_tmux_powerline" target="_blank">github</a>
+            <a href="https://nexus.roborovski-galaxy.ts.net/">dashboard</a>
+          </div>
+        </footer>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════
+    // TYPEWRITER
+    // ═══════════════════════════════════════
+
+    const title = 'claude_tmux_powerline';
+    const tagline = 'monitor your claude usage. directly in tmux.';
+
+    function typeWriter(el, text, speed, callback) {
+      let i = 0;
+      function type() {
+        if (i < text.length) {
+          el.textContent += text.charAt(i);
+          i++;
+          setTimeout(type, speed);
+        } else if (callback) {
+          callback();
+        }
+      }
+      type();
+    }
+
+    // Start typing after CRT boot animation
+    setTimeout(() => {
+      const titleEl = document.getElementById('title-text');
+      const taglineEl = document.getElementById('tagline-text');
+
+      typeWriter(titleEl, title, 55, () => {
+        setTimeout(() => {
+          typeWriter(taglineEl, tagline, 35);
+        }, 300);
+      });
+    }, 700);
+
+    // ═══════════════════════════════════════
+    // DEMO BAR CYCLING
+    // ═══════════════════════════════════════
+
+    const demoStates = [
+      { text: 'Claude: 38% ▓▓░░░ ↻2h31m', color: '#e8a94a', label: '▲ normal — orange' },
+      { text: 'Claude: 52% ▓▓▓░░ ↻1h48m', color: '#e8a94a', label: '▲ normal — orange' },
+      { text: 'Claude: 75% ▓▓▓▓░ ↻58m',   color: '#facc15', label: '▲ caution — yellow' },
+      { text: 'Claude: 82% ▓▓▓▓░ ↻41m',   color: '#facc15', label: '▲ caution — yellow' },
+      { text: 'Claude: 91% ▓▓▓▓▓ ↻22m',   color: '#ef4444', label: '▲ high usage — red' },
+      { text: 'Claude: 96% ▓▓▓▓▓ ↻8m',    color: '#ef4444', label: '▲ slow down — red' },
+    ];
+
+    let demoIdx = 0;
+    const demoEl = document.getElementById('demo-claude');
+    const demoLabel = document.getElementById('demo-label');
+
+    function cycleDemoState() {
+      const state = demoStates[demoIdx];
+      demoEl.textContent = state.text;
+      demoEl.style.color = state.color;
+      demoEl.style.background = state.color.replace(')', ', 0.08)').replace('rgb', 'rgba').replace('#', '');
+      // Set bg using hex with alpha
+      const r = parseInt(state.color.slice(1,3), 16);
+      const g = parseInt(state.color.slice(3,5), 16);
+      const b = parseInt(state.color.slice(5,7), 16);
+      demoEl.style.background = `rgba(${r}, ${g}, ${b}, 0.08)`;
+      demoEl.style.textShadow = `0 0 8px rgba(${r}, ${g}, ${b}, 0.3)`;
+      demoLabel.textContent = state.label;
+      demoLabel.style.color = state.color;
+      demoIdx = (demoIdx + 1) % demoStates.length;
+    }
+
+    // Start cycling after page loads
+    setTimeout(() => {
+      cycleDemoState();
+      setInterval(cycleDemoState, 2500);
+    }, 2000);
+
+    // ═══════════════════════════════════════
+    // SCROLL REVEAL
+    // ═══════════════════════════════════════
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, i * 120);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+
+    document.querySelectorAll('.feature-card').forEach(card => {
+      observer.observe(card);
+    });
+
+    // ═══════════════════════════════════════
+    // COPY BUTTON
+    // ═══════════════════════════════════════
+
+    function copyInstall(btn) {
+      const text = `git clone https://github.com/hwansu93/claude_tmux_powerline.git\ncd claude_tmux_powerline\n./install.sh`;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

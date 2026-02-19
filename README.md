@@ -3,11 +3,16 @@
 A [tmux-powerline](https://github.com/erikw/tmux-powerline) segment that displays your Claude AI session usage directly in the tmux status bar.
 
 ```
-Claude 38% ▓▓░░░ ↻2h31m
-       │   │     └── reset countdown (live, recalculated every refresh)
-       │   └── 5-segment progress bar
-       └── 5-hour session utilization
+Claude: 38% ▓▓░░░ ↻2h31m
+        │   │     └── reset countdown (live, recalculated every refresh)
+        │   └── 5-segment progress bar
+        └── 5-hour session utilization
 ```
+
+Color-coded by usage level:
+- **Orange** (0-74%) — normal usage
+- **Yellow** (75-84%) — approaching limit
+- **Red** (85%+) — near rate limit
 
 ## Why
 
@@ -20,7 +25,7 @@ claude.ai/api/organizations/{org}/usage
         │
         ▼
   curl (every 2 min) ──► cache file (/tmp/)
-                              │
+                              │  (stores: pct, reset_ts, credentials)
                               ▼
                      tmux-powerline calls run_segment()
                               │
@@ -28,13 +33,14 @@ claude.ai/api/organizations/{org}/usage
                      rebuilds countdown from cached reset timestamp
                               │
                               ▼
-                     "Claude 38% ▓▓░░░ ↻2h31m"
+                     "#[fg=colour173]Claude: 38% ▓▓░░░ ↻2h31m"
 ```
 
 **Key design decisions:**
 
 - **Cache-then-render**: API is polled every 120s (configurable). The reset countdown is recalculated from the cached timestamp on every tmux refresh, so it stays accurate without extra API calls.
-- **Graceful degradation**: Network failures fall back to cached data. Missing credentials show `Claude --% ░░░░░ ↻?`. API errors show `Claude err ░░░░░`.
+- **Credential caching**: Session key and org ID are cached alongside API data. Credential files are only read when the cache expires (~every 2 min), not on every tmux refresh (every 1 sec).
+- **Graceful degradation**: Network failures fall back to cached data. Missing credentials show `Claude: --% ░░░░░ ↻?`. Expired keys show `Claude: EXPIRED ░░░░░`.
 - **Browser-like headers**: The claude.ai API sits behind Cloudflare. Plain curl gets blocked. The segment sends browser User-Agent/Origin/Referer headers to pass through.
 
 ## Requirements
@@ -44,9 +50,31 @@ claude.ai/api/organizations/{org}/usage
 - `jq`
 - A Claude AI Pro/Max subscription with an active session key
 
-## Setup
+## Quick Install
+
+```bash
+git clone https://github.com/hwansu93/claude_tmux_powerline.git
+cd claude_tmux_powerline
+./install.sh
+```
+
+The installer will:
+1. Check dependencies
+2. Copy the segment to `~/.config/tmux-powerline/segments/`
+3. Add it to your theme file
+4. Walk you through credential setup
+
+## Manual Setup
 
 ### 1. Get your credentials
+
+Run the interactive helper:
+
+```bash
+./refresh-key.sh
+```
+
+Or manually:
 
 **Session key** (from browser cookies):
 1. Go to [claude.ai](https://claude.ai) and log in
@@ -55,15 +83,12 @@ claude.ai/api/organizations/{org}/usage
 
 **Organization ID**:
 ```bash
-# After storing your session key (step 2), run:
 curl -s \
   -H "Cookie: sessionKey=$(cat ~/.claude-session-key)" \
   -H "User-Agent: Mozilla/5.0" \
   -H "Origin: https://claude.ai" \
   "https://claude.ai/api/organizations" | jq '.[].uuid, .[].name'
 ```
-
-Pick the UUID for your personal org.
 
 ### 2. Store credentials
 
@@ -84,13 +109,11 @@ cp claude_usage.sh ~/.config/tmux-powerline/segments/
 
 ### 4. Add to your theme
 
-Edit your theme file (e.g. `~/.config/tmux-powerline/themes/default.sh`) and add the segment to either `TMUX_POWERLINE_LEFT_STATUS_SEGMENTS` or `TMUX_POWERLINE_RIGHT_STATUS_SEGMENTS`:
+Edit your theme file (e.g. `~/.config/tmux-powerline/themes/default.sh`) and add the segment:
 
 ```bash
 "claude_usage 238 173"
 ```
-
-The two numbers are background and foreground colors (256-color palette). Adjust to match your theme.
 
 ### 5. Reload tmux
 
@@ -106,22 +129,31 @@ Set these in your tmux-powerline `config.sh` (optional):
 |----------|---------|-------------|
 | `TMUX_POWERLINE_SEG_CLAUDE_USAGE_UPDATE_PERIOD` | `120` | Seconds between API polls |
 
-## Display format
+## Display States
 
 ```
-Claude 38% ▓▓░░░ ↻2h31m   normal usage
-Claude 85% ▓▓▓▓▓ ↻47m     high usage
-Claude 0%  ░░░░░ ↻4h59m   fresh session
-Claude --% ░░░░░ ↻?        missing credentials
-Claude err ░░░░░            API error / expired key
+Claude: 38% ▓▓░░░ ↻2h31m    normal (orange)
+Claude: 78% ▓▓▓▓░ ↻1h12m    caution (yellow)
+Claude: 92% ▓▓▓▓▓ ↻47m      high usage (red)
+Claude: 0%  ░░░░░ ↻4h59m    fresh session (orange)
+Claude: EXPIRED ░░░░░        expired session key (red)
+Claude: ERR ░░░░░             API error (red)
+Claude: --% ░░░░░ ↻?         missing credentials
 ```
 
-## Known limitations
+## Refreshing Expired Keys
 
-- **Session keys expire** periodically. When they do, the segment shows `err`. Re-extract from claude.ai cookies.
+Session keys expire periodically. When they do, the segment shows `EXPIRED`. To refresh:
+
+```bash
+cd /path/to/claude_tmux_powerline
+./refresh-key.sh
+```
+
+## Known Limitations
+
+- **Session keys expire** periodically. Run `./refresh-key.sh` to re-extract from claude.ai cookies.
 - **Cloudflare**: If Cloudflare changes its bot detection, the browser-header workaround may break.
-- **Linux `date -d`**: The countdown uses GNU date's `-d` flag. macOS users would need `gdate` from coreutils (not yet handled).
-- The segment reads credentials from disk on every uncached call. This is fast but not ideal for high-security environments.
 
 ## License
 

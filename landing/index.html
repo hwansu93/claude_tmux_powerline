@@ -8,13 +8,13 @@
   <link href="https://fonts.googleapis.com/css2?family=VT323&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0a0a0a;
-      --bg-raised: #111110;
+      --bg: #1a1a1a;
+      --bg-raised: #222221;
       --amber: #da7756;
       --amber-bright: #e8956e;
-      --amber-dim: #8a6055;
-      --amber-muted: #3d2a25;
-      --amber-faint: #1e1512;
+      --amber-dim: #9a7068;
+      --amber-muted: #4a3530;
+      --amber-faint: #2a201e;
       --amber-glow: rgba(218, 119, 86, 0.12);
       --amber-glow-strong: rgba(218, 119, 86, 0.25);
       --green: #4ade80;
@@ -480,40 +480,6 @@
     }
 
     /* ═══════════════════════════════════════
-       FOOTER
-       ═══════════════════════════════════════ */
-
-    .footer {
-      padding: 40px 0 60px;
-      border-top: 1px solid var(--amber-faint);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .footer-left {
-      font-size: 0.75rem;
-      color: var(--amber-muted);
-      line-height: 1.8;
-    }
-
-    .footer-links {
-      display: flex;
-      gap: 20px;
-    }
-
-    .footer-links a {
-      color: var(--amber-dim);
-      text-decoration: none;
-      font-size: 0.8rem;
-      transition: color 0.2s;
-    }
-
-    .footer-links a:hover { color: var(--amber); }
-
-    /* ═══════════════════════════════════════
        RESPONSIVE
        ═══════════════════════════════════════ */
 
@@ -522,7 +488,7 @@
       .tagline { font-size: 1.2rem; }
       .hero { padding: 48px 0 40px; }
       .demo-tmux { flex-direction: column; gap: 8px; align-items: flex-start; }
-      .footer { flex-direction: column; align-items: flex-start; }
+
     }
 
     /* ═══════════════════════════════════════
@@ -705,17 +671,6 @@
           </div>
         </section>
 
-        <!-- FOOTER -->
-        <footer class="footer">
-          <div class="footer-left">
-            built with bash.<br>
-            no dependencies beyond curl and jq.
-          </div>
-          <div class="footer-links">
-            <a href="https://github.com/hwansu93/claude_tmux_powerline" target="_blank">github</a>
-            <a href="https://nexus.roborovski-galaxy.ts.net/">dashboard</a>
-          </div>
-        </footer>
 
       </div>
     </div>

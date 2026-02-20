@@ -1,6 +1,21 @@
 # claude_tmux_powerline
 
-A [tmux-powerline](https://github.com/erikw/tmux-powerline) segment that displays your Claude AI session usage directly in the tmux status bar.
+![Bash](https://img.shields.io/badge/Bash-Script-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+
+A tmux-powerline segment for monitoring Claude AI session usage with progress bar and reset countdown.
+
+## Tech Stack
+
+- Bash
+- curl
+- jq
+- [tmux-powerline](https://github.com/erikw/tmux-powerline)
+
+## Why
+
+If you use Claude Code inside tmux, you want to see your rate limit status without leaving your workflow. This segment polls the claude.ai usage API, caches the result, and renders a compact status with a live countdown to your next reset window.
+
+## Display
 
 ```
 Claude: 38% ▓▓░░░ ↻2h31m
@@ -10,13 +25,9 @@ Claude: 38% ▓▓░░░ ↻2h31m
 ```
 
 Color-coded by usage level:
-- **Orange** (0-74%) — normal usage
-- **Yellow** (75-84%) — approaching limit
-- **Red** (85%+) — near rate limit
-
-## Why
-
-If you use Claude Code inside tmux, you want to see your rate limit status without leaving your workflow. This segment polls the claude.ai usage API, caches the result, and renders a compact status with a live countdown to your next reset window.
+- **Orange** (0-74%) -- normal usage
+- **Yellow** (75-84%) -- approaching limit
+- **Red** (85%+) -- near rate limit
 
 ## Architecture
 
@@ -50,7 +61,9 @@ claude.ai/api/organizations/{org}/usage
 - `jq`
 - A Claude AI Pro/Max subscription with an active session key
 
-## Quick Install
+## Installation
+
+### Quick Install
 
 ```bash
 git clone https://github.com/hwansu93/claude_tmux_powerline.git
@@ -64,9 +77,9 @@ The installer will:
 3. Add it to your theme file
 4. Walk you through credential setup
 
-## Manual Setup
+### Manual Setup
 
-### 1. Get your credentials
+#### 1. Get your credentials
 
 Run the interactive helper:
 
@@ -90,7 +103,7 @@ curl -s \
   "https://claude.ai/api/organizations" | jq '.[].uuid, .[].name'
 ```
 
-### 2. Store credentials
+#### 2. Store credentials
 
 ```bash
 echo "sk-ant-sid01-YOUR-KEY-HERE" > ~/.claude-session-key
@@ -100,14 +113,14 @@ echo "your-org-uuid-here" > ~/.claude-org-id
 chmod 600 ~/.claude-org-id
 ```
 
-### 3. Install the segment
+#### 3. Install the segment
 
 ```bash
 mkdir -p ~/.config/tmux-powerline/segments
 cp claude_usage.sh ~/.config/tmux-powerline/segments/
 ```
 
-### 4. Add to your theme
+#### 4. Add to your theme
 
 Edit your theme file (e.g. `~/.config/tmux-powerline/themes/default.sh`) and add the segment:
 
@@ -115,7 +128,7 @@ Edit your theme file (e.g. `~/.config/tmux-powerline/themes/default.sh`) and add
 "claude_usage 238 173"
 ```
 
-### 5. Reload tmux
+#### 5. Reload tmux
 
 ```bash
 tmux kill-server && tmux
@@ -129,7 +142,9 @@ Set these in your tmux-powerline `config.sh` (optional):
 |----------|---------|-------------|
 | `TMUX_POWERLINE_SEG_CLAUDE_USAGE_UPDATE_PERIOD` | `120` | Seconds between API polls |
 
-## Display States
+## Usage
+
+### Display States
 
 ```
 Claude: 38% ▓▓░░░ ↻2h31m    normal (orange)
@@ -141,7 +156,7 @@ Claude: ERR ░░░░░             API error (red)
 Claude: --% ░░░░░ ↻?         missing credentials
 ```
 
-## Refreshing Expired Keys
+### Refreshing Expired Keys
 
 Session keys expire periodically. When they do, the segment shows `EXPIRED`. To refresh:
 
@@ -157,4 +172,4 @@ cd /path/to/claude_tmux_powerline
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE).

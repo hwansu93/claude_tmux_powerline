@@ -165,7 +165,23 @@ run_segment() {
 			printf '%s\n%s\n%s\n%s\n%s\n' "$now" "expired" "" "$session_key" "$org_id" > "$CLAUDE_USAGE_CACHE_FILE"
 			echo "#[fg=colour196]Claude: EXPIRED ░░░░░"
 		else
-			echo "#[fg=colour196]Claude: ERR ░░░░░"
+			# Transient error (e.g. 500) — fall back to cache
+			if [ -f "$CLAUDE_USAGE_CACHE_FILE" ]; then
+				local cached_pct cached_reset_ts
+				cached_pct=$(sed -n '2p' "$CLAUDE_USAGE_CACHE_FILE")
+				cached_reset_ts=$(sed -n '3p' "$CLAUDE_USAGE_CACHE_FILE")
+				if [ "$cached_pct" = "expired" ]; then
+					echo "#[fg=colour196]Claude: EXPIRED ░░░░░"
+				else
+					local cached_bar countdown color
+					cached_bar=$(_build_bar "$cached_pct")
+					countdown=$(_format_countdown "$cached_reset_ts")
+					color=$(_get_color "$cached_pct")
+					echo "#[fg=${color}]Claude: ${cached_pct}% ${cached_bar} ↻${countdown}"
+				fi
+			else
+				echo "#[fg=colour196]Claude: ERR ░░░░░"
+			fi
 		fi
 		return 0
 	fi
